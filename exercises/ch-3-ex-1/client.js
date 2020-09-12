@@ -98,6 +98,19 @@ app.get('/fetch_resource', function(req, res) {
 	/*
 	 * Use the access token to call the resource server
 	 */
+	if (!access_token) {
+		return res.render('error', {error: 'Missing access token'});
+	}
+	var headers = {
+		'Authorization': 'Bearer ' + access_token
+	};
+	var resource = request('POST',protectedResource, {headers: headers});
+
+	if (resource.statusCode >= 200 && resource.statusCode <300) {
+		res.render('data', {resource: JSON.parse(resource.getBody())});
+	} else {
+		res.render('error', {error: 'server responded with ' + resource.statusCode});
+	}
 	
 });
 
