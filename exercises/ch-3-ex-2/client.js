@@ -6,6 +6,7 @@ var querystring = require('querystring');
 var cons = require('consolidate');
 var randomstring = require("randomstring");
 var __ = require('underscore');
+const { head } = require("underscore");
 __.string = require('underscore.string');
 
 
@@ -34,7 +35,7 @@ var protectedResource = 'http://localhost:9002/resource';
 
 var state = null;
 
-var access_token = '987tghjkiu6trfghjuytrghj';
+var access_token = '987tghjkjiu6trfghjuytrghj';
 var scope = null;
 var refresh_token = 'j2r3oj32r23rmasd98uhjrk2o3i';
 
@@ -115,7 +116,8 @@ app.get('/callback', function(req, res){
 	}
 });
 
-app.get('/fetch_resource', function(req, res) {
+
+var fetchResource = function (req, res) {
 
 	console.log('Making request with access token %s', access_token);
 	
@@ -136,19 +138,52 @@ app.get('/fetch_resource', function(req, res) {
 		/*
 		 * Instead of always returning an error like we do here, refresh the access token if we have a refresh token
 		 */
-		console.log("resource status error code " + resource.statusCode);
-		res.render('error', {error: 'Unable to fetch resource. Status ' + resource.statusCode});
+		access_token = undefined; 
+		if (refresh_token) {
+			refreshAccessToken(req, res);
+			console.log("Got new access token %s", access_token);
+			fetchResource(req, res);
+			return;
+
+		} else {
+			console.log("resource status error code " + resource.statusCode);
+			res.render('error', {error: 'Unable to fetch resource. Status ' + resource.statusCode});
+			return;
+		}
 	}
 	
-	
-});
+};
 
 var refreshAccessToken = function(req, res) {
 
 	/*
 	 * Use the refresh token to get a new access token
 	 */
+
+	console.log("Requesting refresh token");
 	
+	var form_data = qs.stringify({
+		grant_type: 'refresh_token', 
+		refresh_token: refresh_token
+	});
+
+	var headers = {
+		'Content-type': 'application/x-www-form-urlencoded',
+		'Authorization': 'Basic ' + encodeClientCredentials(client.client_id, client.client_secret)
+	};
+	var tokRes = request('POST', authServer.tokenEndpoint, {
+		body: form_data,
+		headers: headers
+	});
+	var body = JSON.parse(tokRes.getBody());
+
+	if (tokRes.statusCode < 200 || tokRes.statusCode > 299) {
+		refresh_token = undefined;
+		access_token = undefined; 
+		return res.render('error', {error: 'Cannot refresh the access token'})
+	}
+	access_token = body.access_token; 
+	refresh_token = (body.refresh_token) ? body.refresh_token : refresh_token;
 };
 
 var buildUrl = function(base, options, hash) {
@@ -170,6 +205,9 @@ var buildUrl = function(base, options, hash) {
 var encodeClientCredentials = function(clientId, clientSecret) {
 	return new Buffer(querystring.escape(clientId) + ':' + querystring.escape(clientSecret)).toString('base64');
 };
+
+app.get('/fetch_resource', fetchResource);
+
 
 app.use('/', express.static('files/client'));
 
