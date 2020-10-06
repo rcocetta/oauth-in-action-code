@@ -26,20 +26,51 @@ var getAccessToken = function(req, res, next) {
 	/*
 	 * Scan for an access token on the incoming request.
 	 */
-	
+	var inToken = null;
+	var auth = req.headers['authorization'];
+	console.log(auth);
+	if (auth && auth.toLowerCase().indexOf('bearer') === 0) {
+		inToken = auth.slice('bearer'.length);
+	} else if (req.body && req.body.access_token) {
+		inToken = req.body.access_token;
+	} else if (req.query && req.query.access_token) {
+		intoken = req.query.access_token;
+	}
+	inToken = (inToken) ? inToken.trim() : null;
+
+	nosql.one(function(token) {
+		if (token.access_token == inToken) {
+			return token;
+		}
+	}, function (err, token) {
+		if (token) {
+			console.log("Founda a matching access token %s", inToken);
+		} else {
+			console.log("No matching token was found for %s", inToken);
+		}
+		req.access_token = inToken;
+		return next(); 
+	});	
 };
 
 app.options('/resource', cors());
 
+// app.all('*', getAccessToken);
 
 /*
  * Add the getAccessToken function to this handler
  */
-app.post("/resource", cors(), function(req, res){
+app.post("/resource", cors(), getAccessToken, function(req, res){
 
 	/*
 	 * Check to see if the access token was found or not
 	 */
+	if (req.access_token) {
+		console.log('Returning resource');
+		res.json(resource);
+	} else {
+		res.status(401).end();
+	}
 	
 });
 
